@@ -1,0 +1,38 @@
+1. เปิด MongoDB Server
+ใช้คำสั่งนี้เพื่อเปิด MongoDB server บนระบบ:
+
+bash
+Copy code
+sudo systemctl start mongod
+2. ปิด MongoDB Server
+ใช้คำสั่งนี้เพื่อปิด MongoDB server:
+
+bash
+Copy code
+sudo systemctl stop mongod
+3. ตรวจสอบสถานะ MongoDB
+ใช้คำสั่งนี้เพื่อตรวจสอบสถานะของ MongoDB server (ว่ามันกำลังทำงานหรือไม่):
+
+bash
+Copy code
+sudo systemctl status mongod
+4. เชื่อมต่อ MongoDB ผ่าน Mongo Shell
+ใช้คำสั่งนี้เพื่อเข้าสู่ MongoDB shell:
+
+bash
+Copy code
+mongo
+เมื่อเข้าสู่ MongoDB shell คุณสามารถใช้คำสั่งต่างๆ เช่น use <database_name> เพื่อเลือกฐานข้อมูลที่ต้องการใช้งานหรือ db เพื่อดูฐานข้อมูลที่กำลังใช้งาน.
+
+5. ยกเลิกการเชื่อมต่อจาก MongoDB (ออกจาก shell)
+ใช้คำสั่งนี้ใน Mongo shell เพื่อออกจากการเชื่อมต่อ:
+
+bash
+Copy code
+exit
+6. เชื่อมต่อ MongoDB ผ่าน URI
+หากคุณใช้ MongoDB URI เพื่อล็อกอินจากแอปหรือการเชื่อมต่อจากภายนอก คุณสามารถใช้ MongoDB URI เช่น:
+
+bash
+Copy code
+mongo mongodb://localhost:27017
