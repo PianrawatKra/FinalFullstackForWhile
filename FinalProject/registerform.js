@@ -6,21 +6,19 @@ const ExcelJS = require('exceljs');
 const { parse } = require('json2csv');
 const path = require('path');
 const mongoose = require('mongoose');
+const session = require('express-session');
 
 const app = express();
 
-// เชื่อมต่อ MongoDB ที่ฐานข้อมูล BananasShop
+// เชื่อมต่อ MongoDB
 mongoose.connect('mongodb://localhost:27017/BananasShop', {
     useNewUrlParser: true,
     useUnifiedTopology: true
 })
 .then(() => console.log('Connected to BananasShop Database'))
 .catch(err => console.error('MongoDB connection error:', err));
-// Select the database to use.
 
-
-
-// สร้าง Schema และ Model สำหรับผู้ใช้ภายใต้ collection Users ในฐานข้อมูล BananasShop
+// สร้าง Schema และ Model สำหรับ Users
 const userSchema = new mongoose.Schema({
     name: { type: String, required: true },
     email: { type: String, required: true, unique: true },
@@ -30,13 +28,19 @@ const userSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now }
 });
 
-// สร้าง Model โดยใช้ collection ที่ชื่อว่า Users
-// กำหนดชื่อ collection ให้ชัดเจน
-const User = mongoose.model('Users', userSchema, 'Users');  // parameter ที่สามคือชื่อ collection ที่ต้องการ  // ชื่อ collection ที่ใช้จะเป็น "Users"
+const User = mongoose.model('Users', userSchema, 'Users');
 
 // Middleware
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static('public'));
+
+// ตั้งค่า express-session
+app.use(session({
+    secret: 'your-secret-key', // เปลี่ยนเป็น secret key ที่ปลอดภัย
+    resave: false,
+    saveUninitialized: false,
+    cookie: { secure: false } // ใช้ true หากใช้ HTTPS
+}));
 
 // ฟังก์ชันสำหรับอัปเดตไฟล์ Excel และ CSV
 async function updateExportFiles(users) {
@@ -46,7 +50,6 @@ async function updateExportFiles(users) {
             return;
         }
 
-        // สร้างไฟล์ Excel
         const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet('Users Data');
         
@@ -60,7 +63,6 @@ async function updateExportFiles(users) {
         await workbook.xlsx.writeFile('users_data.xlsx');
         console.log('Excel file updated.');
 
-        // สร้างไฟล์ CSV
         const csvData = parse(users);
         fs.writeFileSync('users_data.csv', csvData);
         console.log('CSV file updated.');
@@ -79,12 +81,8 @@ app.post('/register', async (req, res) => {
     const { name, email, password, phone, address } = req.body;
 
     try {
-        // Log ข้อมูลที่ได้รับ
-        console.log('Received registration data:', { name, email, phone, address });
-
         const existingUser = await User.findOne({ email });
         if (existingUser) {
-            console.log('Email already exists:', email);
             return res.status(400).send('อีเมลนี้ถูกใช้งานแล้ว');
         }
 
@@ -97,22 +95,7 @@ app.post('/register', async (req, res) => {
             address
         });
 
-        // Log ข้อมูลก่อนบันทึก
-        console.log('Attempting to save user:', {
-            name: newUser.name,
-            email: newUser.email,
-            phone: newUser.phone,
-            address: newUser.address
-        });
-
         const savedUser = await newUser.save();
-        
-        // Log ข้อมูลหลังบันทึก
-        console.log('User saved successfully:', {
-            id: savedUser._id,
-            name: savedUser.name,
-            email: savedUser.email
-        });
 
         const users = await User.find({}, { password: 0 });
         await updateExportFiles(users);
@@ -131,120 +114,105 @@ app.get('/success', (req, res) => {
         <html>
         <head>
             <title>สมัครสมาชิกสำเร็จ</title>
-            <style>
-                body {
-                    font-family: Arial, sans-serif;
-                    margin: 20px;
-                    text-align: center;
-                    padding-top: 50px;
-                }
-                .success-message {
-                    color: #4CAF50;
-                    margin-bottom: 20px;
-                }
-                .button {
-                    padding: 10px 20px;
-                    background-color: #4CAF50;
-                    color: white;
-                    text-decoration: none;
-                    border-radius: 4px;
-                    margin: 10px;
-                    display: inline-block;
-                }
-                .button:hover {
-                    background-color: #45a049;
-                }
-            </style>
         </head>
         <body>
-            <h1 class="success-message">สมัครสมาชิกสำเร็จ</h1>
-            <p>คุณได้สมัครสมาชิกสำเร็จแล้ว</p>
-            <div>
-                <a href="/" class="button">กลับไปยังหน้าสมัครสมาชิก</a>
-                <a href="/users" class="button">ดูรายชื่อผู้ใช้ทั้งหมด</a>
-            </div>
+            <h1>สมัครสมาชิกสำเร็จ</h1>
+            <a href="/login">เข้าสู่ระบบ</a>
         </body>
         </html>
     `);
 });
 
-// Route สำหรับหน้าแสดงข้อมูลผู้ใช้
-app.get('/users', async (req, res) => {
-    try {
-        const users = await User.find({}, { password: 0 }).sort({ createdAt: -1 });
-        res.send(`
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <title>รายชื่อผู้ใช้ทั้งหมด</title>
-                <style>
-                    body { font-family: Arial, sans-serif; margin: 20px; }
-                    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-                    th, td { padding: 10px; border: 1px solid #ddd; text-align: left; }
-                    th { background-color: #f5f5f5; }
-                    tr:hover { background-color: #f9f9f9; }
-                    .header { display: flex; justify-content: space-between; align-items: center; }
-                    .button { padding: 10px 20px; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 4px; }
-                    .button:hover { background-color: #45a049; }
-                </style>
-            </head>
-            <body>
-                <div class="header">
-                    <h2>รายชื่อผู้ใช้ทั้งหมด</h2>
-                    <a href="/" class="button">กลับหน้าหลัก</a>
-                </div>
-                <table>
-                    <tr>
-                        <th>ชื่อ</th>
-                        <th>อีเมล</th>
-                        <th>เบอร์โทร</th>
-                        <th>ที่อยู่</th>
-                        <th>วันที่สมัคร</th>
-                        <th>การกระทำ</th>
-                    </tr>
-                    ${users.map(user => `
-                        <tr>
-                            <td>${user.name}</td>
-                            <td>${user.email}</td>
-                            <td>${user.phone || '-'}</td>
-                            <td>${user.address || '-'}</td>
-                            <td>${new Date(user.createdAt).toLocaleString('th-TH')}</td>
-                            <td><a href="/delete/${user._id}" class="button">ลบ</a></td>
-                        </tr>
-                    `).join('')}
-                </table>
-            </body>
-            </html>
-        `);
-    } catch (error) {
-        res.status(500).send('เกิดข้อผิดพลาดในการดึงข้อมูล');
-    }
+// Route สำหรับหน้าเข้าสู่ระบบ
+app.get('/login', (req, res) => {
+    res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>เข้าสู่ระบบ</title>
+        </head>
+        <body>
+            <h1>เข้าสู่ระบบ</h1>
+            <form method="POST" action="/login">
+                <label>อีเมล:</label>
+                <input type="email" name="email" required>
+                <br>
+                <label>รหัสผ่าน:</label>
+                <input type="password" name="password" required>
+                <br>
+                <button type="submit">เข้าสู่ระบบ</button>
+            </form>
+        </body>
+        </html>
+    `);
 });
 
-// Route สำหรับลบข้อมูลผู้ใช้
-app.get('/delete/:id', async (req, res) => {
-    const userId = req.params.id;
+// Route สำหรับตรวจสอบการเข้าสู่ระบบ
+app.post('/login', async (req, res) => {
+    const { email, password } = req.body;
 
     try {
-        const deletedUser = await User.findByIdAndDelete(userId);
-        if (!deletedUser) {
-            return res.status(404).send('User not found');
+        const user = await User.findOne({ email });
+        if (!user || !(await bcrypt.compare(password, user.password))) {
+            return res.status(400).send('อีเมลหรือรหัสผ่านไม่ถูกต้อง');
         }
 
-        console.log('User deleted:', deletedUser);
-        res.redirect('/users');
+        // เก็บ userId ใน session
+        req.session.userId = user._id;
+        res.redirect('/profile');
     } catch (error) {
-        console.error('Error deleting user:', error);
+        console.error('Error during login:', error);
         res.status(500).send('Internal Server Error');
     }
 });
 
-// เริ่มเซิร์ฟเวอร์
-const PORT = 3000; // เปลี่ยนพอร์ตตามที่ต้องการ
-app.listen(PORT, (err) => {
-    if (err) {
-        console.error('Error starting server:', err.message);
-    } else {
-        console.log(`Server is running on http://localhost:${PORT}`);
+// Route สำหรับหน้าโปรไฟล์
+app.get('/profile', async (req, res) => {
+    try {
+        if (!req.session.userId) {
+            return res.redirect('/login');
+        }
+
+        const user = await User.findById(req.session.userId, { password: 0 });
+        if (!user) {
+            return res.status(404).send('ไม่พบผู้ใช้');
+        }
+
+        res.send(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>โปรไฟล์</title>
+            </head>
+            <body>
+                <h1>โปรไฟล์ของคุณ</h1>
+                <p><strong>ชื่อ:</strong> ${user.name}</p>
+                <p><strong>อีเมล:</strong> ${user.email}</p>
+                <p><strong>เบอร์โทร:</strong> ${user.phone || '-'}</p>
+                <p><strong>ที่อยู่:</strong> ${user.address || '-'}</p>
+                <a href="/logout">ออกจากระบบ</a>
+            </body>
+            </html>
+        `);
+    } catch (error) {
+        console.error('Error loading profile:', error);
+        res.status(500).send('Internal Server Error');
     }
+});
+
+// Route สำหรับออกจากระบบ
+app.get('/logout', (req, res) => {
+    req.session.destroy(err => {
+        if (err) {
+            console.error('Error during logout:', err);
+            return res.status(500).send('Internal Server Error');
+        }
+        res.redirect('/login');
+    });
+});
+
+// เริ่มเซิร์ฟเวอร์
+const PORT = 3000;
+app.listen(PORT, () => {
+    console.log(`Server is running on http://localhost:${PORT}`);
 });
